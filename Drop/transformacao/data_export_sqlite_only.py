@@ -74,7 +74,7 @@ def export_to_sql(df, db_name, table_name):
         print(f"ERRO ao salvar no SQLite: {e}")
 
 def calculate_sales(df):
-    """Processa os dados combinados"""
+    """Processa os dados combinados com cálculo de vendas diárias"""
     print("Iniciando processamento dos dados...")
     
     # 1. Garantir tipos de dados corretos
@@ -89,8 +89,25 @@ def calculate_sales(df):
     df['Data_Pura'] = df['Data da Coleta'].dt.date
     df.drop_duplicates(subset=['ID do Produto', 'Data_Pura'], keep='last', inplace=True)
     
-    # 4. Limpar coluna auxiliar
-    df = df.drop(columns=['Data_Pura'])
+    # 4. Calcular Vendas Dia (diferença de estoque entre dias consecutivos)
+    print("Calculando vendas diárias...")
+    # Ordena por produto e data para cálculo correto (mais antigo primeiro)
+    df.sort_values(by=['ID do Produto', 'Data da Coleta'], inplace=True)
+    
+    # Calcula a diferença de estoque: estoque do dia anterior - estoque atual
+    # shift(1) pega o valor da linha anterior (dia anterior) para cada produto
+    df['Estoque_Anterior'] = df.groupby('ID do Produto')['Estoque'].shift(1)
+    df['Vendas Dia'] = df['Estoque_Anterior'] - df['Estoque']
+    
+    # Para o primeiro registro de cada produto (dia mais antigo), não há vendas anteriores
+    df['Vendas Dia'] = df['Vendas Dia'].fillna(0).astype(int)
+    
+    # Vendas negativas indicam entrada de estoque, então zeramos valores negativos
+    # (só queremos vendas positivas)
+    df.loc[df['Vendas Dia'] < 0, 'Vendas Dia'] = 0
+    
+    # Remove colunas auxiliares
+    df = df.drop(columns=['Estoque_Anterior', 'Data_Pura'])
     
     # 5. Reordenar colunas
     colunas_finais = [
@@ -98,7 +115,8 @@ def calculate_sales(df):
         'Data da Coleta',
         'Produto',
         'Preço',
-        'Estoque', 
+        'Estoque',
+        'Vendas Dia',
         'Liquidação',
         'Qtd. Vendida',
         'ID do Produto',
@@ -124,6 +142,10 @@ def calculate_sales(df):
     # Adicionar coluna Número Item se não existir
     if 'Número Item' not in df.columns:
         df['Número Item'] = pd.NA
+    
+    # Adicionar coluna Vendas Dia se não existir
+    if 'Vendas Dia' not in df.columns:
+        df['Vendas Dia'] = 0
     
     # Reordenar e filtrar colunas
     df = df.reindex(columns=colunas_finais, fill_value='')

@@ -89,7 +89,7 @@ def load_old_data(creds_file, spreadsheet_name, worksheet_name):
         return None
 
 def calculate_sales(df):
-    """Recebe o DataFrame combinado e prepara o DataFrame final sem as colunas Vendas_Dia e Entradas_Dia."""
+    """Recebe o DataFrame combinado e prepara o DataFrame final com a coluna Vendas_Dia."""
 
     print("Iniciando processamento (tipo, ordenação e deduplicação)...")
 
@@ -105,10 +105,27 @@ def calculate_sales(df):
     df['Data_Pura'] = df['Data da Coleta'].dt.date
     df.drop_duplicates(subset=['ID do Produto', 'Data_Pura'], keep='last', inplace=True)
 
-    # 4. Limpar colunas auxiliares
-    df = df.drop(columns=['Data_Pura'])
+    # 4. Calcular Vendas Dia (diferença de estoque entre dias consecutivos)
+    print("Calculando vendas diárias...")
+    # Ordena por produto e data para cálculo correto (mais antigo primeiro)
+    df.sort_values(by=['ID do Produto', 'Data da Coleta'], inplace=True)
+    
+    # Calcula a diferença de estoque: estoque do dia anterior - estoque atual
+    # shift(1) pega o valor da linha anterior (dia anterior) para cada produto
+    df['Estoque_Anterior'] = df.groupby('ID do Produto')['Estoque'].shift(1)
+    df['Vendas Dia'] = df['Estoque_Anterior'] - df['Estoque']
+    
+    # Para o primeiro registro de cada produto (dia mais antigo), não há vendas anteriores
+    df['Vendas Dia'] = df['Vendas Dia'].fillna(0).astype(int)
+    
+    # Vendas negativas indicam entrada de estoque, então zeramos valores negativos
+    # (só queremos vendas positivas)
+    df.loc[df['Vendas Dia'] < 0, 'Vendas Dia'] = 0
+    
+    # Remove a coluna auxiliar
+    df = df.drop(columns=['Estoque_Anterior', 'Data_Pura'])
 
-    # 5. Reordenar colunas para o formato final (Removidas as colunas Vendas_Dia e Entradas_Dia)
+    # 5. Reordenar colunas para o formato final (com Vendas_Dia)
     # Incluímos possível coluna de numeração se ela existir (será recriada depois se ausente)
     colunas_finais = [
         'Número Item',  # nome padrão interno para numeração (será mapeado ao cabeçalho existente se houver)
@@ -116,6 +133,7 @@ def calculate_sales(df):
         'Produto',
         'Preço',
         'Estoque',
+        'Vendas Dia',
         'Liquidação',
         'Qtd. Vendida',
         'ID do Produto',
