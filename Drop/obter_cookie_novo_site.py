@@ -5,13 +5,15 @@ Faz login no novo site e salva o estado da sessão
 """
 
 import asyncio
-import getpass
 import sys
 import os
 from playwright.async_api import async_playwright
 
 # ==================== CONFIGURAÇÕES ====================
-URL_LOGIN = "https://dash.wedrop.com.br/login"
+LOGIN_EMAIL = "renidreshop@gmail.com"  # ⚠️ ALTERE COM SEU EMAIL
+SENHA_LOGIN = "36180"              # ⚠️ ALTERE COM SUA SENHA
+
+URL_LOGIN = "https://dash.wedrop.com.br/catalog"
 STORAGE_STATE_FILE = "storage_state.json"
 
 # Workaround para Windows
@@ -22,12 +24,12 @@ if sys.platform == "win32":
         print(f"⚠️ Aviso: {e}")
 
 
-async def obter_autenticacao(login_email, senha_login):
+async def obter_autenticacao():
     """
     Faz login e salva o estado da sessão
     """
     print("🔐 Iniciando processo de autenticação...")
-    print("📧 Usando credenciais informadas localmente.")
+    print(f"📧 Email: {LOGIN_EMAIL}")
 
     async with async_playwright() as p:
         try:
@@ -39,14 +41,14 @@ async def obter_autenticacao(login_email, senha_login):
             # Navegar até o site
             print(f"🌐 Acessando: {URL_LOGIN}")
             await page.goto(URL_LOGIN, wait_until="domcontentloaded")
-
+            
             # Aguardar um momento para ver se há página de login
             await page.wait_for_timeout(3000)
-
+            
             # Verificar se estamos na página de login ou se já estamos logados
             current_url = page.url
             print(f"📍 URL atual: {current_url}")
-
+            
             # Se já estivermos no catálogo, provavelmente já logado (via cookies anteriores)
             if 'catalog' in current_url and 'login' not in current_url:
                 print("✅ Já parece estar no catálogo. Salvando estado atual...")
@@ -56,9 +58,9 @@ async def obter_autenticacao(login_email, senha_login):
                 await browser.close()
                 return True
 
-            # Se estamos na página de login, fazer login
-            print("📝 Página de login detectada. Preenchendo credenciais...")
-
+            # Preencher credenciais
+            print("📝 Preenchendo credenciais...")
+            
             # Tentar diferentes seletores de email
             email_seletores = [
                 'input[type="email"]',
@@ -72,7 +74,7 @@ async def obter_autenticacao(login_email, senha_login):
             email_preenchido = False
             for seletor in email_seletores:
                 try:
-                    await page.fill(seletor, login_email)
+                    await page.fill(seletor, LOGIN_EMAIL)
                     email_preenchido = True
                     print(f"✅ Email preenchido com seletor: {seletor}")
                     break
@@ -95,7 +97,7 @@ async def obter_autenticacao(login_email, senha_login):
             senha_preenchida = False
             for seletor in senha_seletores:
                 try:
-                    await page.fill(seletor, senha_login)
+                    await page.fill(seletor, SENHA_LOGIN)
                     senha_preenchida = True
                     print(f"✅ Senha preenchida com seletor: {seletor}")
                     break
@@ -134,18 +136,12 @@ async def obter_autenticacao(login_email, senha_login):
             # Aguardar redirecionamento
             print("⏳ Aguardando confirmação de login...")
             try:
-                await page.wait_for_url(
-                    lambda url: "/catalog" in url and "/login" not in url,
-                    timeout=15000,
-                )
-                print("✅ Login bem-sucedido! Catálogo carregado.")
+                await page.wait_for_url("**/dashboard/**", timeout=15000)
+                print("✅ Login bem-sucedido! Dashboard carregado.")
             except:
-                print("⚠️ Timeout ao aguardar catálogo. Verifique as credenciais.")
+                print("⚠️ Timeout ao aguardar dashboard. Verifique as credenciais.")
                 await page.screenshot(path="login_screenshot.png")
                 print("📸 Screenshot salvo em: login_screenshot.png")
-                await context.close()
-                await browser.close()
-                return False
 
             # Aguardar alguns segundos para garantir o carregamento
             await page.wait_for_timeout(2000)
@@ -179,18 +175,22 @@ def main():
             print("ℹ️ Usando arquivo existente.")
             return
 
-    login_email = os.environ.get("WEDROP_EMAIL") or input("E-mail: ").strip()
-    senha_login = os.environ.get("WEDROP_PASSWORD") or getpass.getpass("Senha: ")
+    # Verificar credenciais
+    if LOGIN_EMAIL == "seu_email@exemplo.com":
+        print("❌ ERRO: Edite o script e configure suas credenciais!")
+        print(f"Abra: {__file__}")
+        print("Altere LOGIN_EMAIL e SENHA_LOGIN com seus dados")
+        return
 
     # Executar autenticação
-    sucesso = asyncio.run(obter_autenticacao(login_email, senha_login))
+    sucesso = asyncio.run(obter_autenticacao())
 
     if sucesso:
         print("\n" + "=" * 70)
-        print("✅ PRONTO! Você pode agora usar o spider wedrop_catalog")
+        print("✅ PRONTO! Você pode agora usar o app_streamlit.py")
         print("=" * 70)
-        print("\nPara executar o scraper, use:")
-        print("  python wedrop_monitor_sistema.py")
+        print("\nPara iniciar o Streamlit, execute:")
+        print("  streamlit run app_streamlit.py")
     else:
         print("\n" + "=" * 70)
         print("❌ Falha na autenticação")
