@@ -11,7 +11,7 @@ LOGIN_EMAIL = "renidreshop@gmail.com"
 MINHA_SENHA_DE_LOGIN = "&kT%cR9NFi1dkv"
 # --------------------------
 
-URL_LOGIN = 'https://wedrop.com.br/minha-conta/'
+URL_LOGIN = 'https://meudropbrasil.com/minha-conta/'
 COOKIE_FILE = 'cookie.txt'
 STORAGE_STATE_FILE = 'storage_state.json' 
 
@@ -55,7 +55,7 @@ async def get_and_save_cookie():
         
         cookie_parts = []
         for cookie in all_cookies:
-            if 'wedrop.com.br' in cookie['domain']:
+            if 'meudropbrasil.com' in cookie['domain']:
                 cookie_parts.append(f"{cookie['name']}={cookie['value']}")
         
         cookie_string = "; ".join(cookie_parts)

@@ -1,5 +1,5 @@
 @echo OFF
-echo Iniciando automacao completa do Scraper Wedrop...
+echo Iniciando automacao completa do Scraper Meudrop...
 
 REM --- PASSO 1: Garantir que estamos na pasta correta ---
 cd /D "%~dp0"
@@ -16,19 +16,19 @@ IF %ERRORLEVEL% NEQ 0 (
 echo Cookie atualizado com sucesso!
 
 REM --- PASSO 3: Limpar dados antigos (JSON e DB) ---
-IF EXIST transformacao\wedrop_data.db (
-    echo Limpando wedrop_data.db antigo...
-    del transformacao\wedrop_data.db
+IF EXIST transformacao\meudrop_data.db (
+    echo Limpando meudrop_data.db antigo...
+    del transformacao\meudrop_data.db
 )
 
 REM --- PASSO 4: Executar o Scraper (Scrapy) ---
-echo (2/3) Executando o Scraper (wedrop)...
+echo (2/3) Executando o Scraper (meudrop)...
 echo (Salvando progresso em data.json em tempo real...)
 
 REM --- CORREÇÃO CONTRA CRASH/CONGELAMENTO (Funciona no Python 3.12) ---
 set ASYNCIO_EVENT_LOOP=asyncio.SelectorEventLoop
 REM Usamos -O (maiúsculo) para sobrescrever completamente e garantir output completo
-py -m scrapy crawl wedrop -O data.json
+py -m scrapy crawl meudrop -O data.json
 
 REM (Pequena pausa para garantir que o Windows libere o arquivo)
 timeout /t 2 /nobreak > NUL

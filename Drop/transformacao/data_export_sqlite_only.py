@@ -9,8 +9,8 @@ from datetime import datetime
 import sys
 
 # --- CONFIGURAÇÕES ---
-INPUT_JSON_FILE = '../data.json'
-DB_NAME = 'wedrop_data.db'
+INPUT_JSON_FILE = '../data.json' 
+DB_NAME = 'meudrop_data.db'
 TABLE_NAME = 'produtos_raspados'
 
 def load_new_data(file_path):

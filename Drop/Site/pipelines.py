@@ -53,38 +53,6 @@ class SplitStockPipeline:
 
 import logging
 
-class WedropCatalogPipeline:
-    def __init__(self):
-        self.categories_file = None
-        self.products_file = None
-
-    def open_spider(self, spider):
-        base_dir = os.path.dirname(os.path.dirname(__file__))
-        categories_path = os.path.join(base_dir, 'wedrop_categories.json')
-        products_path = os.path.join(base_dir, 'wedrop_products.json')
-        self.categories_file = open(categories_path, 'w', encoding='utf-8')
-        self.products_file = open(products_path, 'w', encoding='utf-8')
-
-    def close_spider(self, spider):
-        if self.categories_file:
-            self.categories_file.close()
-        if self.products_file:
-            self.products_file.close()
-
-    def process_item(self, item, spider):
-        try:
-            # Check if it's a category item or product item
-            if 'category_name' in item and 'category_count' in item:
-                # It's a category item
-                self.categories_file.write(json.dumps(item, ensure_ascii=False) + "\n")
-            elif 'product_id' in item:
-                # It's a product item
-                self.products_file.write(json.dumps(item, ensure_ascii=False) + "\n")
-        except Exception as e:
-            spider.logger.error(f"Erro no pipeline: {e}")
-        return item
-
-
 class GoogleSheetsBatchPipeline:
 
     # Tamanho do lote. Enviaremos os dados ao Google a cada 50 itens.

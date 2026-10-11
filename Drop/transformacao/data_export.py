@@ -9,7 +9,7 @@ import sys # Usado apenas para checagem de erro
 
 # --- CONFIGURAÇÕES ---
 INPUT_JSON_FILE = '../data.json'
-DB_NAME = 'wedrop_data.db'
+DB_NAME = 'meudrop_data.db'
 TABLE_NAME = 'produtos_raspados'
 
 # CONFIGURAÇÕES DO GOOGLE SHEETS

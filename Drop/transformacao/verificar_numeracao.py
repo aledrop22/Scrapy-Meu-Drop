@@ -2,13 +2,13 @@ import pandas as pd
 import sqlite3
 
 # Carregar dados do SQLite para verificar numeração
-conn = sqlite3.connect('wedrop_data.db')
+conn = sqlite3.connect('meudrop_data.db')
 df = pd.read_sql_query("SELECT * FROM produtos_raspados ORDER BY 'Data da Coleta' DESC LIMIT 20", conn)
 conn.close()
 
 print("🎯 VERIFICAÇÃO DA NUMERAÇÃO POR ORDEM DE RASPAGEM")
 print("=" * 60)
-print(f"📊 Total de produtos no banco: {len(pd.read_sql_query('SELECT COUNT(*) as total FROM produtos_raspados', sqlite3.connect('wedrop_data.db'))['total'][0])}")
+print(f"📊 Total de produtos no banco: {len(pd.read_sql_query('SELECT COUNT(*) as total FROM produtos_raspados', sqlite3.connect('meudrop_data.db'))['total'][0])}")
 
 print("\n📋 PRIMEIROS 10 PRODUTOS (mais recentes):")
 print("-" * 60)
