@@ -18,11 +18,7 @@ Python315/
 # Cookies e Credenciais (SEGURANÇA)
 # (NUNCA envie seus logins para o GitHub)
 *.txt
-.env
-.env.*
-!.env.example
 credicial_client_secret.json
-storage_state.json
 
 # Cache e logs do Python e Scrapy
 __pycache__/

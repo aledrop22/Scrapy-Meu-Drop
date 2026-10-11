@@ -1,40 +1,49 @@
-# Monitoramento do catálogo WeDrop
+# Monitoramento diário do catálogo WeDrop
 
-O fluxo principal está concentrado em `wedrop_monitor_sistema.py`: ele lê a configuração local, valida a sessão, autentica automaticamente quando necessário, mapeia todas as categorias e produtos e grava catálogo e histórico no SQLite e no Supabase. Não é preciso obter cookies antes nem executar um segundo scraper.
+O monitor percorre as categorias do catálogo autenticado, abre todos os produtos encontrados em cada categoria e grava os detalhes e as movimentações do histórico em `wedrop_monitoramento.db`. Eventos já registrados não são duplicados em coletas futuras.
 
-## Configuração inicial
+## Preparar a sessão
 
-1. Copie `.env.example` para `.env` dentro de `Drop`.
-2. Preencha `WEDROP_EMAIL`, `WEDROP_PASSWORD`, `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
-3. No SQL Editor do projeto Supabase, execute uma vez o conteúdo de `supabase_schema.sql`.
-4. Instale as dependências: `python -m pip install -r requirements.txt`.
-5. Execute o mapeamento integrado: `python wedrop_monitor_sistema.py`.
+No terminal, a partir de `Drop`:
 
-O arquivo `.env` e os cookies locais não devem ser enviados ao Git. A chave de serviço Supabase fica somente no processo local do scraper; não a coloque em JavaScript ou código do navegador.
+```powershell
+python obter_cookie_novo_site.py
+```
 
-O programa verifica a sessão do catálogo a cada execução. Se ela tiver expirado, usa as credenciais configuradas, valida o login, salva `storage_state.json` e continua a coleta na mesma execução. Em terminal interativo, e-mail e senha também podem ser solicitados sem gravar a senha; no painel, podem ser informados no formulário. O processo falha explicitamente se o login, a configuração do Supabase ou uma gravação remota falhar.
+O navegador solicitará o e-mail e a senha sem salvar a senha em arquivo. Também é possível fornecer `WEDROP_EMAIL` e `WEDROP_PASSWORD` como variáveis de ambiente. A sessão autenticada é salva em `storage_state.json`; não compartilhe esse arquivo.
 
-## Dados mantidos
+## Mapear o catálogo e atualizar históricos
 
-- Categorias, contagem informada pelo site e quantidade de produtos encontrados.
-- Identificador, título, categoria e URL do produto.
-- SKU, EAN, preço, disponibilidade/estoque, saldo, situação, fornecedor, CNPJ, estado de origem, NCM, dimensões, peso, descrição e contador de vendas quando exibidos na página.
-- Registros do histórico de estoque, com tipo de movimento, quantidade, data/hora original, data interpretada e chave da nota fiscal.
+Execute a coleta completa com:
 
-As tabelas `wedrop_categories`, `wedrop_products` e `wedrop_stock_events` recebem upserts idempotentes. Eventos repetidos em uma coleta diária não são contabilizados duas vezes. SQLite é mantido como cópia operacional local.
+```powershell
+python wedrop_monitor_sistema.py
+```
 
-## Painel e rotina diária
+O processo interrompe com erro explícito se a sessão expirou ou se nenhuma categoria for encontrada. Ao final, informa quantas categorias e produtos foram processados. No banco, cada categoria registra também a quantidade informada pelo site e a quantidade de links de produto encontrados.
 
-Inicie o painel com `streamlit run app_monitoramento_vendas.py` ou `start_streamlit.bat`. Use **Atualizar catálogo e históricos** para executar a mesma coleta e renovar a sessão quando necessário. O painel mostra o ranking dos 20 produtos com mais saídas/vendas no dia, gráfico de vendas, entradas de estoque e cobertura por categoria.
+Para acompanhamento diário, execute esse comando uma vez por dia. No Windows, ele pode ser configurado no Agendador de Tarefas. A nova coleta atualiza o catálogo e acrescenta os eventos ainda não vistos, preservando o histórico.
 
-Para manter a série diária, execute o scraper uma vez por dia pelo Agendador de Tarefas do Windows. O comando é `python wedrop_monitor_sistema.py`; ele faz autenticação, mapeamento e sincronização numa única execução.
+## Ver ranking e gráfico
 
-## Troubleshooting
+Inicie o painel:
 
-- **Supabase não configurado:** verifique as variáveis no `.env` e reinicie o terminal ou painel.
-- **Tabela inexistente/permissão negada:** execute `supabase_schema.sql` no SQL Editor e mantenha a chave de serviço apenas no processo local.
-- **Login recusado:** confira as credenciais; cookies só são salvos depois de confirmar a navegação autenticada.
-- **Categoria com cobertura incompleta:** o painel compara o total reportado com os links de produtos encontrados; confira se o site carrega paginação/lazy-loading ou se mudou sua interface.
-- **Histórico sem totais no gráfico:** eventos com data ilegível são preservados no banco, porém não podem ser agrupados por dia.
+```powershell
+streamlit run app_monitoramento_vendas.py
+```
 
-O spider Scrapy antigo continua no repositório por compatibilidade, mas não é usado pelos lançadores principais. Use o fluxo unificado acima.
+O painel permite selecionar a data e apresenta:
+
+- Os 20 produtos com mais unidades vendidas no dia e um gráfico de barras.
+- O total diário de vendas nos últimos 14 dias em um gráfico de linha.
+- As entradas de estoque registradas na data selecionada.
+- A cobertura do mapeamento por categoria, comparando a contagem do site com os produtos encontrados.
+
+O ranking soma as quantidades de movimentações identificadas como `Saída` ou `Venda` no histórico. Movimentações `Entrada` e `Recebimento` aparecem separadamente como entradas no estoque. Datas que não puderem ser interpretadas são preservadas no banco, mas não entram nos totais por dia.
+
+## Arquivos gerados
+
+- `wedrop_monitoramento.db` — categorias, produtos e histórico incremental.
+- `storage_state.json` — sessão autenticada privada.
+
+Para renovar a sessão expirada, execute novamente `obter_cookie_novo_site.py` e repita a coleta.

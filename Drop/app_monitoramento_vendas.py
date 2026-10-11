@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from datetime import date
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-from sales_reporting import SalesRepository, load_local_environment
+from sales_reporting import SalesRepository
 from wedrop_monitor_sistema import DB_FILE, WedropMonitor
 
-load_local_environment()
 
 st.set_page_config(
     page_title="Monitoramento WeDrop",
@@ -28,30 +26,11 @@ def main() -> None:
 
     with st.sidebar:
         selected_day = st.date_input("Data do relatório", value=date.today())
-        with st.form("catalog_sync"):
-            login_email = st.text_input(
-                "E-mail WeDrop",
-                value=os.environ.get("WEDROP_EMAIL", ""),
-            )
-            login_password = st.text_input(
-                "Senha WeDrop",
-                value=os.environ.get("WEDROP_PASSWORD", ""),
-                type="password",
-            )
-            start_mapping = st.form_submit_button(
-                "Atualizar catálogo e históricos", type="primary"
-            )
-        if start_mapping:
+        if st.button("Atualizar catálogo e históricos", type="primary"):
             monitor = WedropMonitor()
             try:
                 with st.spinner("Mapeando categorias e históricos de produtos..."):
-                    asyncio.run(
-                        monitor.run_full_mapping(
-                            email=login_email,
-                            password=login_password,
-                            prompt_for_credentials=False,
-                        )
-                    )
+                    asyncio.run(monitor.run_full_mapping())
                 st.success("Mapeamento concluído.")
             except Exception as exc:
                 st.error(f"Falha na coleta: {exc}")

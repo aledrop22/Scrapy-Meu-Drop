@@ -1,36 +1,22 @@
-# Monitoramento WeDrop
+Projeto Scrapy para coletar dados do site Meu Drop Brasil.
 
-O fluxo principal mapeia o catálogo autenticado WeDrop e sincroniza produtos, estoque, saldos e histórico de movimentações no Supabase e em um banco SQLite local.
+## Ambiente (Windows)
+- Instale Python 3.12 (marque "Add Python to PATH").
+- Opcional, porém recomendado: crie um ambiente virtual
+	- `py -m venv .venv`
+	- `.\.venv\Scripts\activate`
+- Instale dependências a partir da pasta `Drop`:
+	- `py -m pip install --upgrade pip`
+	- `py -m pip install -r requirements.txt`
+- Instale o navegador do Playwright:
+	- `py -m playwright install chromium`
 
-## Configuração única
+## Execução resumida
+1) Dentro de `Drop`, obtenha o cookie/login (gera `storage_state.json`):
+	 - `py obter_cookie.py`
+2) Rode o fluxo completo:
+	 - `run_auto.bat`
 
-1. Na pasta `Drop`, copie `.env.example` para `.env`.
-2. Configure `WEDROP_EMAIL`, `WEDROP_PASSWORD`, `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
-3. Execute `Drop/supabase_schema.sql` uma vez no SQL Editor do Supabase.
-4. Instale as dependências de `Drop/requirements.txt` e o Chromium do Playwright:
-
-   ```powershell
-   cd Drop
-   python -m pip install -r requirements.txt
-   python -m playwright install chromium
-   ```
-
-As credenciais e cookies são privados. `.env` e `storage_state.json` estão ignorados pelo Git.
-
-## Coletar
-
-Dentro de `Drop`, execute:
-
-```powershell
-python wedrop_monitor_sistema.py
-```
-
-O mesmo comando verifica ou renova a sessão, salva os cookies e continua o mapeamento completo, sem executar um script de autenticação separado. Também pode ser iniciado por `run_auto.bat` ou `run_wedrop_catalog.bat`. O processo verifica as tabelas do Supabase antes de abrir o catálogo e falha explicitamente se configuração ou gravação remota estiver indisponível.
-
-## Visualizar relatórios
-
-```powershell
-streamlit run app_monitoramento_vendas.py
-```
-
-O painel mostra o ranking diário dos 20 produtos mais vendidos, gráficos de vendas, entradas de estoque e cobertura de produtos por categoria. Consulte [Drop/WEDROP_CATALOG_README.md](Drop/WEDROP_CATALOG_README.md) para detalhes.
+## Notas
+- As credenciais do login estão em `Drop/obter_cookie.py`.
+- O scraper e o Playwright estão otimizados para Python 3.12.

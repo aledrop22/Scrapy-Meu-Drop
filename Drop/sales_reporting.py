@@ -1,18 +1,14 @@
-"""Local and Supabase persistence for WeDrop catalog and stock history."""
+"""Shared parsing and persistence for daily WeDrop stock-history reports."""
 
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import sqlite3
 import unicodedata
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
-
-import requests
-from dotenv import load_dotenv
 
 
 def parse_event_datetime(value: str) -> datetime | None:
@@ -30,8 +26,7 @@ def parse_event_datetime(value: str) -> datetime | None:
         lambda raw: datetime.strptime(raw, "%d-%m-%Y"),
     ):
         try:
-            parsed = parser(text)
-            return parsed.astimezone() if parsed.tzinfo is None else parsed
+            return parser(text)
         except ValueError:
             continue
     return None
@@ -65,64 +60,6 @@ def event_fingerprint(product_id: str, event: dict[str, Any]) -> str:
     return hashlib.sha256("\x1f".join(fields).encode("utf-8")).hexdigest()
 
 
-PRODUCT_FIELDS = (
-    "product_id",
-    "name",
-    "category",
-    "url",
-    "sku",
-    "ean",
-    "price",
-    "availability",
-    "stock",
-    "total_stock_count",
-    "real_balance",
-    "is_active",
-    "supplier",
-    "cnpj",
-    "origin_state",
-    "ncm",
-    "weight",
-    "height",
-    "width",
-    "length",
-    "description",
-    "number_sales",
-    "updated_at",
-)
-
-
-def load_local_environment() -> None:
-    """Load ignored local .env settings without overriding process-level values."""
-    env_file = Path(__file__).resolve().parent / ".env"
-    load_dotenv(env_file, override=False)
-
-
-def make_event_records(
-    product: dict[str, Any], captured_at: str
-) -> list[dict[str, Any]]:
-    records = []
-    for event in product.get("stock_history", []):
-        raw_date = str(event.get("date", "")).strip()
-        parsed_date = parse_event_datetime(raw_date)
-        records.append(
-            {
-                "event_id": event_fingerprint(product["product_id"], event),
-                "product_id": product["product_id"],
-                "movement_type": str(event.get("type", "")).strip(),
-                "event_kind": classify_movement(str(event.get("type", ""))),
-                "quantity": parse_quantity(str(event.get("quantity", ""))),
-                "event_at": (
-                    parsed_date.isoformat(timespec="seconds") if parsed_date else None
-                ),
-                "event_at_raw": raw_date,
-                "nf_key": str(event.get("nf_key", "")).strip(),
-                "recorded_at": captured_at,
-            }
-        )
-    return records
-
-
 class SalesRepository:
     def __init__(self, database_path: Path):
         self.connection = sqlite3.connect(database_path)
@@ -145,23 +82,8 @@ class SalesRepository:
                 category TEXT NOT NULL,
                 url TEXT NOT NULL,
                 sku TEXT,
-                ean TEXT,
                 price TEXT,
-                availability TEXT,
                 stock TEXT,
-                total_stock_count TEXT,
-                real_balance TEXT,
-                is_active TEXT,
-                supplier TEXT,
-                cnpj TEXT,
-                origin_state TEXT,
-                ncm TEXT,
-                weight TEXT,
-                height TEXT,
-                width TEXT,
-                length TEXT,
-                description TEXT,
-                number_sales TEXT,
                 updated_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS stock_events (
@@ -176,21 +98,8 @@ class SalesRepository:
                 recorded_at TEXT NOT NULL,
                 FOREIGN KEY (product_id) REFERENCES products(product_id)
             );
-            CREATE INDEX IF NOT EXISTS stock_events_kind_date_idx
-                ON stock_events (event_kind, event_at);
-            CREATE INDEX IF NOT EXISTS stock_events_product_date_idx
-                ON stock_events (product_id, event_at);
             """
         )
-        existing_columns = {
-            row["name"]
-            for row in self.connection.execute("PRAGMA table_info(products)")
-        }
-        for column in PRODUCT_FIELDS[5:-1]:
-            if column not in existing_columns:
-                self.connection.execute(
-                    f"ALTER TABLE products ADD COLUMN {column} TEXT"
-                )
         self.connection.commit()
 
     def save_category(
@@ -217,54 +126,61 @@ class SalesRepository:
         )
         self.connection.commit()
 
-    def save_products(
-        self, products: list[dict[str, Any]], captured_at: str
-    ) -> list[dict[str, Any]]:
-        product_values = [
-            tuple(product.get(field, "") for field in PRODUCT_FIELDS[:-1])
-            + (captured_at,)
-            for product in products
-        ]
-        update_columns = ", ".join(
-            f"{field} = excluded.{field}" for field in PRODUCT_FIELDS[1:]
-        )
-        placeholders = ", ".join("?" for _ in PRODUCT_FIELDS)
-        columns = ", ".join(PRODUCT_FIELDS)
-        self.connection.executemany(
-            f"""
-            INSERT INTO products ({columns}) VALUES ({placeholders})
-            ON CONFLICT(product_id) DO UPDATE SET {update_columns}
-            """,
-            product_values,
-        )
-        events = [
-            event
-            for product in products
-            for event in make_event_records(product, captured_at)
-        ]
-        self.connection.executemany(
-            """
-            INSERT OR IGNORE INTO stock_events
-                (event_id, product_id, movement_type, event_kind, quantity, event_at,
-                 event_at_raw, nf_key, recorded_at)
-            VALUES (:event_id, :product_id, :movement_type, :event_kind, :quantity,
-                    :event_at, :event_at_raw, :nf_key, :recorded_at)
-            """,
-            events,
-        )
-        self.connection.commit()
-        return events
-
     def save_product(self, product: dict[str, Any], captured_at: str) -> None:
-        self.save_products([product], captured_at)
+        self.connection.execute(
+            """
+            INSERT INTO products
+                (product_id, name, category, url, sku, price, stock, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(product_id) DO UPDATE SET
+                name = excluded.name,
+                category = excluded.category,
+                url = excluded.url,
+                sku = excluded.sku,
+                price = excluded.price,
+                stock = excluded.stock,
+                updated_at = excluded.updated_at
+            """,
+            (
+                product["product_id"],
+                product["name"],
+                product["category"],
+                product["url"],
+                product.get("sku", ""),
+                product.get("price", ""),
+                product.get("stock", ""),
+                captured_at,
+            ),
+        )
+        for event in product.get("stock_history", []):
+            raw_date = str(event.get("date", "")).strip()
+            parsed_date = parse_event_datetime(raw_date)
+            self.connection.execute(
+                """
+                INSERT OR IGNORE INTO stock_events
+                    (event_id, product_id, movement_type, event_kind, quantity,
+                     event_at, event_at_raw, nf_key, recorded_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event_fingerprint(product["product_id"], event),
+                    product["product_id"],
+                    str(event.get("type", "")).strip(),
+                    classify_movement(str(event.get("type", ""))),
+                    parse_quantity(str(event.get("quantity", ""))),
+                    parsed_date.isoformat(timespec="seconds") if parsed_date else None,
+                    raw_date,
+                    str(event.get("nf_key", "")).strip(),
+                    captured_at,
+                ),
+            )
+        self.connection.commit()
 
     def sales_for_day(self, selected_day: date) -> list[sqlite3.Row]:
-        day_start = datetime.combine(
-            selected_day, datetime.min.time()
-        ).astimezone().isoformat()
+        day_start = datetime.combine(selected_day, datetime.min.time()).isoformat()
         next_day = datetime.combine(
             selected_day + timedelta(days=1), datetime.min.time()
-        ).astimezone().isoformat()
+        ).isoformat()
         return list(
             self.connection.execute(
                 """
@@ -298,25 +214,19 @@ class SalesRepository:
                 ORDER BY day
                 """,
                 (
-                    datetime.combine(first_day, datetime.min.time())
-                    .astimezone()
-                    .isoformat(),
+                    datetime.combine(first_day, datetime.min.time()).isoformat(),
                     datetime.combine(
                         through_day + timedelta(days=1), datetime.min.time()
-                    )
-                    .astimezone()
-                    .isoformat(),
+                    ).isoformat(),
                 ),
             )
         )
 
     def stock_entries_for_day(self, selected_day: date) -> list[sqlite3.Row]:
-        day_start = datetime.combine(
-            selected_day, datetime.min.time()
-        ).astimezone().isoformat()
+        day_start = datetime.combine(selected_day, datetime.min.time()).isoformat()
         next_day = datetime.combine(
             selected_day + timedelta(days=1), datetime.min.time()
-        ).astimezone().isoformat()
+        ).isoformat()
         return list(
             self.connection.execute(
                 """
@@ -345,117 +255,3 @@ class SalesRepository:
 
     def close(self) -> None:
         self.connection.close()
-
-
-class SupabaseRepository:
-    """Persist catalog records through Supabase's PostgREST upsert endpoint."""
-
-    def __init__(self, url: str, api_key: str, timeout: int = 30):
-        self.base_url = f"{url.rstrip('/')}/rest/v1"
-        self.timeout = timeout
-        self.session = requests.Session()
-        self.session.headers.update(
-            {
-                "apikey": api_key,
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "Prefer": "resolution=merge-duplicates,return=minimal",
-            }
-        )
-
-    @classmethod
-    def from_environment(cls) -> "SupabaseRepository":
-        load_local_environment()
-        url = os.environ.get("SUPABASE_URL", "").strip()
-        api_key = (
-            os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-            or os.environ.get("SUPABASE_KEY", "").strip()
-        )
-        missing = [
-            name
-            for name, value in (
-                ("SUPABASE_URL", url),
-                ("SUPABASE_SERVICE_ROLE_KEY ou SUPABASE_KEY", api_key),
-            )
-            if not value
-        ]
-        if missing:
-            raise RuntimeError(
-                "Supabase não configurado. Defina SUPABASE_URL e "
-                "SUPABASE_SERVICE_ROLE_KEY (ou SUPABASE_KEY) no ambiente antes "
-                "de iniciar a coleta."
-            )
-        return cls(url, api_key)
-
-    def _upsert(self, table: str, rows: list[dict[str, Any]], conflict: str) -> None:
-        for start in range(0, len(rows), 200):
-            response = self.session.post(
-                f"{self.base_url}/{table}",
-                params={"on_conflict": conflict},
-                json=rows[start : start + 200],
-                timeout=self.timeout,
-            )
-            if not response.ok:
-                raise RuntimeError(
-                    f"Supabase rejeitou gravação em {table} "
-                    f"(HTTP {response.status_code}): {response.text[:500]}"
-                )
-
-    def validate(self) -> None:
-        """Fail before a long scrape if the configured Supabase schema is unavailable."""
-        table_keys = {
-            "wedrop_categories": "category_url",
-            "wedrop_products": "product_id",
-            "wedrop_stock_events": "event_id",
-        }
-        for table, key in table_keys.items():
-            response = self.session.get(
-                f"{self.base_url}/{table}",
-                params={"select": key, "limit": "0"},
-                timeout=self.timeout,
-            )
-            if not response.ok:
-                raise RuntimeError(
-                    f"Supabase indisponível para a tabela {table} "
-                    f"(HTTP {response.status_code}): {response.text[:500]}. "
-                    "Confirme SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY e execute "
-                    "supabase_schema.sql no SQL Editor do projeto."
-                )
-
-    def save_category(
-        self, category: dict[str, Any], mapped_products: int, captured_at: str
-    ) -> None:
-        self._upsert(
-            "wedrop_categories",
-            [
-                {
-                    "category_url": category["url"],
-                    "name": category["name"],
-                    "expected_products": category.get("count"),
-                    "mapped_products": mapped_products,
-                    "updated_at": captured_at,
-                }
-            ],
-            "category_url",
-        )
-
-    def save_products(
-        self, products: list[dict[str, Any]], captured_at: str
-    ) -> None:
-        product_rows = [
-            {field: product.get(field, "") for field in PRODUCT_FIELDS[:-1]}
-            | {"updated_at": captured_at}
-            for product in products
-        ]
-        events_by_id = {
-            event["event_id"]: event
-            for product in products
-            for event in make_event_records(product, captured_at)
-        }
-        self._upsert("wedrop_products", product_rows, "product_id")
-        self._upsert(
-            "wedrop_stock_events", list(events_by_id.values()), "event_id"
-        )
-
-    def close(self) -> None:
-        self.session.close()
