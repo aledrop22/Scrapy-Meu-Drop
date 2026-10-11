@@ -12,7 +12,7 @@ O fluxo principal está concentrado em `wedrop_monitor_sistema.py`: ele lê a co
 
 O arquivo `.env` e os cookies locais não devem ser enviados ao Git. A chave de serviço Supabase fica somente no processo local do scraper; não a coloque em JavaScript ou código do navegador.
 
-O programa verifica a sessão do catálogo a cada execução. Se ela tiver expirado, usa as credenciais configuradas, valida o login, salva `storage_state.json` e continua a coleta na mesma execução. Em terminal interativo, e-mail e senha podem ser solicitados sem gravar a senha; no painel, são lidos do `.env`/ambiente e nenhum campo de credenciais é exibido. O processo falha explicitamente se o login, a configuração do Supabase ou uma gravação remota falhar.
+O programa verifica a sessão do catálogo a cada execução. Se ela tiver expirado, usa as credenciais configuradas, valida o login, salva `storage_state.json` e continua a coleta na mesma execução. Em terminal interativo, e-mail e senha também podem ser solicitados sem gravar a senha; no painel, podem ser informados no formulário. O processo falha explicitamente se o login, a configuração do Supabase ou uma gravação remota falhar.
 
 ## Dados mantidos
 
@@ -25,7 +25,7 @@ As tabelas `wedrop_categories`, `wedrop_products` e `wedrop_stock_events` recebe
 
 ## Painel e rotina diária
 
-Inicie o painel com `streamlit run app_monitoramento_vendas.py` ou `start_streamlit.bat`. Use **Atualizar catálogo e históricos** para executar a mesma coleta e renovar a sessão quando necessário. No sidebar, selecione o intervalo de datas e uma categoria para visualizar totais de vendas e reposições, produtos movimentados e gráficos diários e por produto. Sem categoria selecionada, o painel mostra o comparativo entre categorias e o ranking dos 20 produtos mais vendidos no período.
+Inicie o painel com `streamlit run app_monitoramento_vendas.py` ou `start_streamlit.bat`. Use **Atualizar catálogo e históricos** para executar a mesma coleta e renovar a sessão quando necessário. O painel mostra o ranking dos 20 produtos com mais saídas/vendas no dia, gráfico de vendas, entradas de estoque e cobertura por categoria.
 
 Para manter a série diária, execute o scraper uma vez por dia pelo Agendador de Tarefas do Windows. O comando é `python wedrop_monitor_sistema.py`; ele faz autenticação, mapeamento e sincronização numa única execução.
 
